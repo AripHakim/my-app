@@ -1,7 +1,7 @@
 # Welcome to your Expo app 👋
 To clone this project run
   ```bash
-   git remote add https://github.com/AripHakim/my-app.git
+   git clone https://github.com/AripHakim/my-app.git
    ```
 
 ## Get started
