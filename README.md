@@ -1,6 +1,8 @@
 # Welcome to your Expo app 👋
-
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+To clone this project run
+  ```bash
+   git remote add https://github.com/AripHakim/my-app.git
+   ```
 
 ## Get started
 
