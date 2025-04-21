@@ -1,136 +1,188 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Button, FlatList, TouchableOpacity } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import { useRouter, useNavigation } from 'expo-router';
 
-const SERVER_URL = 'https://winnowing.up.railway.app'; // Sesuaikan dengan backend Flask
+const SERVER_URL = 'https://winnowing.up.railway.app';
 
-const PlagiarismDetector = () => {
-    const [files, setFiles] = useState<{ name: string; uri: string }[]>([]);
-    const [error, setError] = useState('');
-    const router = useRouter();
+const HomePage = () => {
+  const [files, setFiles] = useState<{ name: string; uri: string }[]>([]);
+  const [error, setError] = useState('');
+  const router = useRouter();
+  const navigation = useNavigation();
+  
 
-    const pickDocuments = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: 'application/pdf',
-                multiple: true, // ✅ Memungkinkan pemilihan banyak file
-            });
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => null, // Menghilangkan tombol kembali
+    });
+  }, [navigation]);
 
-            if (result.canceled || !result.assets || result.assets.length === 0) {
-                setError('Tidak ada file yang dipilih.');
-                return;
-            }
+  const pickDocuments = async () => {
+    setError('');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        multiple: true,
+      });
 
-            let newFiles = [...files];
+      if (result.canceled || !result.assets?.length) {
+        setError('Tidak ada file yang dipilih.');
+        return;
+      }
 
-            result.assets.forEach(file => {
-                if (!newFiles.some(existingFile => existingFile.uri === file.uri)) {
-                    newFiles.push({ name: file.name || 'Unnamed', uri: file.uri });
-                } else {
-                    setError('Beberapa file sudah dipilih sebelumnya.');
-                }
-            });
+      let newFiles = [...files];
+      let duplicateFound = false;
 
-            setFiles(newFiles);
-        } catch (err) {
-            console.error('Error picking document:', err);
-            setError('Gagal memilih dokumen.');
+      result.assets.forEach(file => {
+        if (!newFiles.some(existing => existing.uri === file.uri)) {
+          newFiles.push({ name: file.name || 'Unnamed', uri: file.uri });
+        } else {
+          duplicateFound = true;
         }
-    };
+      });
 
-    const removeFile = (index: number) => {
-        setFiles(files.filter((_, i) => i !== index));
-    };
+      if (duplicateFound) {
+        setError('Beberapa file sudah dipilih sebelumnya.');
+      }
 
-    const extractTextFromPDF = async (fileUri: string, fileName: string) => {
-        try {
-            const formData = new FormData();
-            formData.append('pdf', {
-                uri: fileUri,
-                name: fileName,
-                type: 'application/pdf',
-            } as any);
+      setFiles(newFiles);
+    } catch (err) {
+      console.error('Gagal memilih dokumen:', err);
+      setError('Gagal memilih dokumen.');
+    }
+  };
 
-            const response = await fetch(`${SERVER_URL}/extract-text`, {
-                method: 'POST',
-                body: formData,
-            });
+  const removeFile = (index: number) => {
+    setError('');
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
-            const data = await response.json();
-            if (data.error) throw new Error(data.error);
-            return data.text;
-        } catch (err) {
-            console.error('Gagal mengekstrak teks dari PDF:', err);
-            setError('Gagal mengekstrak teks dari PDF.');
-            return '';
+  const extractTextFromPDF = async (fileUri: string, fileName: string) => {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) throw new Error('File tidak ditemukan di path tersebut');
+
+      const formData = new FormData();
+      formData.append('pdf', {
+        uri: fileInfo.uri,
+        name: fileName,
+        type: 'application/pdf',
+      } as any);
+
+      const response = await fetch(`${SERVER_URL}/extract-text`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      return data.text;
+    } catch (err) {
+      console.error('Gagal mengekstrak teks dari PDF:', err);
+      setError('Gagal mengekstrak teks dari PDF.');
+      return '';
+    }
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    if (files.length < 2) {
+      setError('Mohon unggah setidaknya 2 file PDF.');
+      return;
+    }
+
+    try {
+      const extractedTexts = await Promise.all(
+        files.map(async (file) => {
+          const text = await extractTextFromPDF(file.uri, file.name);
+          return text;
+        })
+      );
+
+      if (extractedTexts.some(text => text === '')) {
+        setError('Gagal mengekstrak teks dari salah satu dokumen.');
+        return;
+      }
+
+      const documents = files.map((file, index) => ({
+        name: file.name,
+        text: extractedTexts[index]
+      }));
+
+      const response = await fetch(`${SERVER_URL}/plagiarism`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents, k: 5, window_size: 4 })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.similarities) {
+        throw new Error(data?.error || 'Gagal menerima hasil dari server.');
+      }
+
+      router.push({
+        pathname: "/hasil",
+        params: {
+          result: JSON.stringify(data.similarities),
+          fileNames: JSON.stringify(files.map(file => file.name))
         }
-    };
+      });
+    } catch (error) {
+      console.error('Terjadi kesalahan saat memproses file:', error);
+      setError('Terjadi kesalahan saat memproses file.');
+    }
+  };
 
-    const handleSubmit = async () => {
-        setError('');
-        if (files.length < 2) {
-            setError('Mohon unggah setidaknya 2 file PDF.');
-            return;
-        }
-
-        try {
-            const extractedTexts = await Promise.all(files.map(file => extractTextFromPDF(file.uri, file.name)));
-
-            if (extractedTexts.some(text => text === '')) {
-                setError('Gagal mengekstrak teks dari salah satu dokumen.');
-                return;
-            }
-
-            const response = await fetch(`${SERVER_URL}/plagiarism`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    documents: extractedTexts,
-                    k: 5,
-                    window_size: 4,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Gagal menghubungkan ke server.');
-            }
-
-            const data = await response.json();
-
-            router.push({ 
-                pathname: "/hasil", 
-                params: { 
-                    result: JSON.stringify(data.similarities),
-                    fileNames: JSON.stringify(files.map(file => file.name))
-                } 
-            });
-        } catch (error) {
-            console.error('Terjadi kesalahan saat memproses file:', error);
-            setError('Terjadi kesalahan saat memproses file.');
-        }
-    };
-
-    return (
-        <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', paddingBottom: 20, textAlign: 'center' }}>Plagiarism Detector</Text>           
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        data={files}
+        keyExtractor={(_, index) => index.toString()}
+        ListHeaderComponent={
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
+              Deteksi Plagiarisme
+            </Text>
             <Button title="Pilih File PDF" onPress={pickDocuments} />
-            <Button title="Cek Plagiasi" onPress={handleSubmit} disabled={files.length < 2} />
+            <View style={{ marginVertical: 10 }}>
+              <Button title="Cek Plagiasi" onPress={handleSubmit} disabled={files.length < 2} />
+            </View>
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <TouchableOpacity onPress={() => removeFile(index)} style={{ paddingHorizontal: 20 }}>
+            <Text style={{ color: 'blue', marginVertical: 5 }}>
+              {item.name} (Tap untuk hapus)
+            </Text>
+          </TouchableOpacity>
+        )}
+        ListFooterComponent={
+            <View>
+              {error ? <Text style={{ color: 'red', margin: 20 }}>{error}</Text> : null}
+              <View style={{ height: 100 }} />
+            </View>
+          }          
+      />
 
-            {files.length > 0 && (
-                <FlatList
-                    data={files}
-                    keyExtractor={(item, index) => index.toString()}
-                    renderItem={({ item, index }) => (
-                        <TouchableOpacity onPress={() => removeFile(index)}>
-                            <Text style={{ color: 'blue', marginVertical: 5 }}>{item.name} (Tap untuk hapus)</Text>
-                        </TouchableOpacity>
-                    )}
-                />
-            )}
-            {error ? <Text style={{ color: 'red', marginTop: 10 }}>{error}</Text> : null}
-        </View>
-    );
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        padding: 10,
+        borderTopWidth: 1,
+        borderColor: '#ccc',
+        backgroundColor: '#f9f9f9',
+        position: 'absolute',
+        bottom: 0,
+        width: '100%',
+      }}>
+        <Button title="Beranda" onPress={() => router.push('/')} />
+        <Button title="Riwayat" onPress={() => router.push('/history')} />
+      </View>
+    </View>
+  );
 };
 
-export default PlagiarismDetector;
+export default HomePage;
