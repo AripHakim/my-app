@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "my-app",
+    "name": "Tumpy",
     "slug": "my-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/hmim.jpeg",
+    "icon": "./assets/images/logo-tumpy.jpg",
     "scheme": "Deteksi-Plagiarisme",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,9 +13,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/logo-tumpy.jpg",
         "backgroundColor": "#151718"
-      }
+      },
+      "package": "com.ariprhakim.myapp"
     },
     "web": {
       "bundler": "metro",
@@ -27,15 +28,25 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/no-bg_tumpy.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "865036f9-cdee-4c2c-94c0-73b7af55cd1a"
+      }
+    },
+    "owner": "ariprhakim"
   }
 }
