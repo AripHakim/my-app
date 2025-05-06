@@ -145,7 +145,7 @@ const HasilPlagiasi = () => {
   }
   
   // Ambil sesi terakhir
-  const latestSession = historyData.length > 0 ? historyData[historyData.length - 1] : null;
+  const latestSession = historyData.length > 0 ? historyData[0] : null;
   
   // Hitung data untuk tabel jika ada sesi terakhir
   let tableData: ArrayLike<any> | null | undefined = [];
@@ -170,9 +170,6 @@ const HasilPlagiasi = () => {
     <SafeAreaView style={styles.safeArea}>
     <View style={styles.mainContainer}>
       <View style={styles.contentContainer}>
-        <Text style={styles.title}>Hasil Pemeriksaan Plagiasi</Text>
-        {/* <Text style={styles.subtitle}>Ringkasan hasil pemeriksaan terakhir</Text> */}
-
         {!latestSession ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="time-outline" size={48} color="#999" />
@@ -305,9 +302,6 @@ const HasilPlagiasi = () => {
                       </View>
                     );
                   }}
-                  initialNumToRender={10}
-                  maxToRenderPerBatch={5}
-                  windowSize={7}
                 />
               </Pressable>
             </Pressable>
